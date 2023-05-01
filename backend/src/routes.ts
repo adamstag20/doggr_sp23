@@ -176,17 +176,22 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
 		});
 
 		//READ MESSAGES SENT
-	app.search<{Body: { sender: string }}>("/messages/sent", async (req, reply) => {
+	app.search("/messages/sent", async (req, reply) => {
 		const { sender } = req.body;
 		
 		try {
-			const theMessages = await req.em.find(Message, { from_sender: sender });
+			const theUser = await req.em.findOne(User, { email: sender });
+			const theMessages = await req.em.find(Message, {from_sender: theUser.id})
 			console.log(theMessages);
 			reply.send(theMessages);
 		} catch (err) {
 			console.error(err);
 			reply.status(500).send(err);
 		}
+	});
+
+	app.get("/messages", async (request: FastifyRequest, reply: FastifyReply) => {
+		return request.em.find(Message, {});
 	});
 
 	// DELETE MESSAGE
