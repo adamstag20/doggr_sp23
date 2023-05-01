@@ -1,5 +1,6 @@
 import {FastifyInstance, FastifyReply, FastifyRequest} from "fastify";
 import { Match } from "./db/entities/Match.js";
+import { Message } from "./db/entities/Message.js";
 import {User} from "./db/entities/User.js";
 import {ICreateUsersBody} from "./types.js";
 
@@ -129,6 +130,79 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
 			return reply.status(500).send(err);
 		}
 
+	});
+
+    // CREATE MESSAGE
+	app.post<{Body: { sender: string, receiver: string, message: string }}>("/messages", async (req, reply) => {
+		const { sender, receiver, message} = req.body;
+
+		try {
+			// make sure that the matchee exists & get their user account
+			const from_sender = await req.em.findOne(User, { email: sender });
+			// do the same for the matcher/owner
+			const to_receiver = await req.em.findOne(User, { email: receiver });
+
+			//create a new match between them
+			const newMatch = await req.em.create(Message, {
+				from_sender,
+				to_receiver,
+				message
+			});
+
+			//persist it to the database
+			await req.em.flush();
+			// send the match back to the user
+			return reply.send(newMatch);
+		} catch (err) {
+			console.error(err);
+			return reply.status(500).send(err);
+		}
+
+	});
+
+		// UPDATE MESSAGE
+		app.put<{Body: {messageId: number ,message: string}}>("/messages", async(req, reply) => {
+			const { messageId, message} = req.body;
+			
+			const messageToChange = await req.em.findOne(Message, {id: messageId});
+			messageToChange.message = message;
+			
+			
+			// Reminder -- this is how we persist our JS object changes to the database itself
+			await req.em.flush();
+			console.log(messageToChange);
+			reply.send(messageToChange);
+			
+		});
+
+		//READ MESSAGES SENT
+	app.search<{Body: { sender: string }}>("/messages/sent", async (req, reply) => {
+		const { sender } = req.body;
+		
+		try {
+			const theMessages = await req.em.find(Message, { from_sender: sender });
+			console.log(theMessages);
+			reply.send(theMessages);
+		} catch (err) {
+			console.error(err);
+			reply.status(500).send(err);
+		}
+	});
+
+	// DELETE MESSAGE
+	app.delete<{ Body: {messageId: number}}>("/messages", async(req, reply) => {
+		const { messageId } = req.body;
+		
+		try {
+			const messageDelete = await req.em.findOne(Message, { id: messageId });
+			
+			await req.em.remove(messageDelete).flush();
+			console.log(messageDelete);
+			reply.send(messageDelete);
+		} catch (err) {
+			console.error(err);
+			reply.status(500).send(err);
+		}
 	});
 }
 
