@@ -1,4 +1,5 @@
 import {FastifyInstance, FastifyReply, FastifyRequest} from "fastify";
+import { checkLanguage } from "./checkLanguage.js";
 import { Match } from "./db/entities/Match.js";
 import { Message } from "./db/entities/Message.js";
 import {User} from "./db/entities/User.js";
@@ -135,8 +136,12 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
     // CREATE MESSAGE
 	app.post<{Body: { sender: string, receiver: string, message: string }}>("/messages", async (req, reply) => {
 		const { sender, receiver, message} = req.body;
-
+        const add = checkLanguage(message);
+		console.log(add);
+		if (add == false){ return reply.status(500).send("You used a Bad word!");}
+		
 		try {
+
 			// make sure that the matchee exists & get their user account
 			const from_sender = await req.em.findOne(User, { email: sender });
 			// do the same for the matcher/owner
@@ -190,6 +195,24 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
 		}
 	});
 
+		//READ MESSAGES RECEIVED
+		app.search("/messages", async (req, reply) => {
+			const { receiver } = req.body;
+			
+			try {
+				const theUser = await req.em.findOne(User, { email: receiver });
+				const theMessages = await req.em.find(Message, {from_sender: theUser.id})
+				console.log(theMessages);
+				reply.send(theMessages);
+			} catch (err) {
+				console.error(err);
+				reply.status(500).send(err);
+			}
+		});
+
+
+    // GET ALL MESSAGES for my sanity
+
 	app.get("/messages", async (request: FastifyRequest, reply: FastifyReply) => {
 		return request.em.find(Message, {});
 	});
@@ -204,6 +227,22 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
 			await req.em.remove(messageDelete).flush();
 			console.log(messageDelete);
 			reply.send(messageDelete);
+		} catch (err) {
+			console.error(err);
+			reply.status(500).send(err);
+		}
+	});
+
+	// DELETE ALL MESSAGES I SENT
+	app.delete<{ Body: {sender: string}}>("/messages/all", async(req, reply) => {
+		const { sender } = req.body;
+		
+		try {
+			const theUser = await req.em.findOne(User, { email: sender });
+			const theMessages = await req.em.find(Message, {from_sender: theUser.id})
+			await req.em.remove(theMessages).flush();
+			console.log(theMessages);
+			reply.send(theMessages);
 		} catch (err) {
 			console.error(err);
 			reply.status(500).send(err);
