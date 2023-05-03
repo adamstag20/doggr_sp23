@@ -91,15 +91,33 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
 	});
 	
 	// DELETE
-	app.delete<{ Body: {email}}>("/users", async(req, reply) => {
-		const { email } = req.body;
+	app.delete<{ Body: {email, pass}}>("/users", async(req, reply) => {
+		const { email, pass } = req.body;
+
+		if (process.env.ADMIN_PASS !== pass){
+			return reply.status(500).send("Denied Delete");
+		}
 		
 		try {
-			const theUser = await req.em.findOne(User, { email });
-			
-			await req.em.remove(theUser).flush();
-			console.log(theUser);
-			reply.send(theUser);
+			const theUser = await req.em.findOne(User, { email },
+				{populate: [
+					"matches",
+					"matched_by",
+					"from",
+					"to"
+				]});
+
+				if (theUser.from.isInitialized()){
+					await req.em.remove(theUser).flush();
+					console.log(theUser);
+					reply.send(theUser);	
+				}
+				else {
+					const user = req.em.getReference(User, email);
+					await req.em.remove(user).flush();
+					console.log(theUser);
+					reply.send(theUser);	
+				}
 		} catch (err) {
 			console.error(err);
 			reply.status(500).send(err);
@@ -218,9 +236,12 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
 	});
 
 	// DELETE MESSAGE
-	app.delete<{ Body: {messageId: number}}>("/messages", async(req, reply) => {
-		const { messageId } = req.body;
+	app.delete<{ Body: {messageId: number, pass: string }}>("/messages", async(req, reply) => {
+		const { messageId, pass } = req.body;
 		
+		if (process.env.ADMIN_PASS !== pass){
+			return reply.status(500).send("Denied Delete");
+		}
 		try {
 			const messageDelete = await req.em.findOne(Message, { id: messageId });
 			
@@ -234,9 +255,12 @@ async function DoggrRoutes(app: FastifyInstance, _options = {}) {
 	});
 
 	// DELETE ALL MESSAGES I SENT
-	app.delete<{ Body: {sender: string}}>("/messages/all", async(req, reply) => {
-		const { sender } = req.body;
-		
+	app.delete<{ Body: {sender: string, pass: string}}>("/messages/all", async(req, reply) => {
+		const { sender, pass } = req.body;
+
+		if (process.env.ADMIN_PASS !== pass){
+			return reply.status(500).send("Denied Delete");
+		}	
 		try {
 			const theUser = await req.em.findOne(User, { email: sender });
 			const theMessages = await req.em.find(Message, {from_sender: theUser.id})
